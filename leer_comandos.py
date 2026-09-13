@@ -22,6 +22,12 @@ import requests
 
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_URL = (
+    f"https://generativelanguage.googleapis.com/v1beta/models/"
+    f"{GEMINI_MODEL}:generateContent"
+)
 OFFSET_FILE = "telegram_offset.txt"
 CONFIG_FILE = "config.json"
 DIAS_VALIDOS = ("martes", "jueves")
@@ -76,6 +82,66 @@ def texto_estado(cfg):
         estado = "ACTIVADO" if c.get("activo", True) else "desactivado"
         lineas.append(f"• {dia.capitalize()}: {estado}, a las {c.get('hora', '13:00')}")
     return "📋 Configuración actual:\n" + "\n".join(lineas)
+
+
+PROMPT_SISTEMA = """Eres el intérprete de un bot de Telegram que gestiona reservas \
+de una clase de gimnasio/piscina. El usuario te escribe frases en español natural. \
+Tu única tarea es traducir esa frase a UNA acción, y responder EXCLUSIVAMENTE con un \
+objeto JSON (sin markdown, sin texto adicional, sin ```), con esta forma exacta:
+
+{"accion": "activar" | "desactivar" | "cambiar_hora" | "estado" | "ayuda" | "desconocido",
+ "dia": "martes" | "jueves" | null,
+ "hora": "HH:MM" | null}
+
+Reglas:
+- Los únicos días válidos son "martes" y "jueves". Si el usuario menciona otro día, \
+usa "desconocido".
+- Si el usuario pide reservar/activar un día -> "activar".
+- Si pide cancelar/desactivar/quitar un día -> "desactivar".
+- Si pide cambiar la hora -> "cambiar_hora" y rellena "hora" en formato HH:MM.
+- Si pide ver el estado/configuración actual -> "estado".
+- Si pide ayuda o no sabe qué hacer -> "ayuda".
+- Si no entiendes la frase o no tiene relación con reservas -> "desconocido".
+- "hora" y "dia" van a null cuando no apliquen.
+- Responde SOLO el JSON, nada más.
+"""
+
+
+def interpretar_con_ia(texto):
+    """Manda el texto libre a Gemini y devuelve un dict de acción, o None si falla."""
+    if not GEMINI_API_KEY:
+        return None
+    try:
+        resp = requests.post(
+            GEMINI_URL,
+            params={"key": GEMINI_API_KEY},
+            json={
+                "system_instruction": {"parts": [{"text": PROMPT_SISTEMA}]},
+                "contents": [{"parts": [{"text": texto}]}],
+                "generationConfig": {
+                    "temperature": 0,
+                    "responseMimeType": "application/json",
+                },
+            },
+            timeout=20,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        salida = data["candidates"][0]["content"]["parts"][0]["text"]
+        accion = json.loads(salida)
+
+        if accion.get("accion") not in (
+            "activar", "desactivar", "cambiar_hora", "estado", "ayuda", "desconocido"
+        ):
+            return None
+        if accion.get("dia") not in (None, "martes", "jueves"):
+            accion["dia"] = None
+        if accion.get("hora") and not re.match(r"^\d{1,2}:\d{2}$", accion["hora"]):
+            accion["hora"] = None
+        return accion
+    except Exception as e:
+        log.error(f"Error consultando Gemini: {e}")
+        return None
 
 
 TEXTO_AYUDA = (
@@ -141,7 +207,37 @@ def main():
             responder(TEXTO_AYUDA)
             continue
 
-        responder("No entendí ese comando 🤔\n\n" + TEXTO_AYUDA)
+        # Si no coincidió con ningún comando fijo, probamos a interpretarlo
+        # como lenguaje natural usando Gemini (si hay API key configurada).
+        accion = interpretar_con_ia(texto)
+
+        if not accion or accion.get("accion") == "desconocido":
+            responder("No entendí ese mensaje 🤔\n\n" + TEXTO_AYUDA)
+            continue
+
+        tipo = accion["accion"]
+        dia = accion.get("dia")
+
+        if tipo in ("activar", "desactivar") and dia:
+            cfg.setdefault(dia, {"activo": True, "hora": "13:00"})
+            cfg[dia]["activo"] = (tipo == "activar")
+            cambiado = True
+            responder(f"✅ Reserva de los {dia} {'activada' if tipo == 'activar' else 'desactivada'}.")
+        elif tipo == "cambiar_hora" and dia and accion.get("hora"):
+            cfg.setdefault(dia, {"activo": True, "hora": "13:00"})
+            cfg[dia]["hora"] = accion["hora"]
+            cambiado = True
+            responder(f"✅ Hora de reserva de los {dia} cambiada a las {accion['hora']}.")
+        elif tipo == "estado":
+            responder(texto_estado(cfg))
+        elif tipo == "ayuda":
+            responder(TEXTO_AYUDA)
+        else:
+            # Acción reconocida pero faltan datos (p.ej. día no válido)
+            responder(
+                "Entendí que quieres algo, pero no me quedó claro el día o la hora 🤔\n\n"
+                + TEXTO_AYUDA
+            )
 
     guardar_offset(offset)
     if cambiado:
