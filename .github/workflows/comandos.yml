@@ -1,8 +1,11 @@
-name: Leer comandos de Telegram
+name: Leer comandos de Telegram (respaldo manual)
+# NOTA: desde que existe el webhook en Vercel (api/webhook.js), Telegram ya no
+# manda las actualizaciones por polling, así que este workflow ya no se
+# ejecuta automáticamente. Se deja solo por si el webhook falla y hace falta
+# forzar una lectura manual (Actions -> Run workflow), tras cambiar
+# temporalmente el bot a modo polling con /deleteWebhook.
 
 on:
-  schedule:
-    - cron: "*/10 * * * *"
   workflow_dispatch: {}
 
 permissions:
