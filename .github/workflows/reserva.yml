@@ -30,6 +30,7 @@ jobs:
           IMDECO_PASS: ${{ secrets.IMDECO_PASS }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          OMITIR_ESPERA: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
         run: python reservar_piscina.py
 
       - name: Guardar capturas si algo falla
