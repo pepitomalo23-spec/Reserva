@@ -89,10 +89,31 @@ def login(page):
 
     page.goto(BASE_URL)
     page.click("text=Acceso identificado")
+    page.wait_for_selector("#ContentFixedSection_uLogin_txtIdentificador", timeout=15000)
     page.fill("#ContentFixedSection_uLogin_txtIdentificador", USUARIO)
     page.fill("#ContentFixedSection_uLogin_txtContrasena", CONTRASENA)
     page.click("text=Iniciar sesión")
-    page.wait_for_selector("text=Reserva de espacios", timeout=20000)
+
+    try:
+        page.wait_for_selector("text=Reserva de espacios", timeout=20000)
+    except PWTimeout:
+        # Diagnóstico: guardamos captura, URL, título y buscamos mensajes
+        # de error típicos para saber la causa exacta del fallo de login
+        page.screenshot(path="login_fallido.png", full_page=True)
+        log.error(f"LOGIN FALLIDO. URL actual: {page.url}")
+        log.error(f"Título de la página: {page.title()}")
+        contenido = page.content().lower()
+        pistas = [
+            "incorrect", "incorrecto", "identificador o contraseña",
+            "no coincide", "captcha", "bloqueado", "error",
+        ]
+        encontradas = [p for p in pistas if p in contenido]
+        if encontradas:
+            log.error(f"Palabras clave encontradas en la página: {encontradas}")
+        else:
+            log.error("No se encontraron mensajes de error reconocibles en la página")
+        raise
+
     log.info("Login correcto")
 
 
