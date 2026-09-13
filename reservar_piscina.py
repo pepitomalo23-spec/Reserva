@@ -57,6 +57,10 @@ def calcular_fecha_objetivo():
 
 
 def esperar_hasta_medianoche_madrid():
+    if os.environ.get("OMITIR_ESPERA") == "1":
+        log.info("OMITIR_ESPERA=1 -> me salto la espera a medianoche (modo prueba)")
+        return
+
     tz = ZoneInfo("Europe/Madrid")
     ahora = dt.datetime.now(tz)
     hoy_medianoche = dt.datetime.combine(ahora.date(), dt.time(0, 0, 0), tzinfo=tz)
