@@ -20,6 +20,7 @@ INSTALACION LOCAL (solo para pruebas manuales):
 import os
 import sys
 import time
+import json
 import logging
 import datetime as dt
 from datetime import date, timedelta
@@ -42,6 +43,17 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 log = logging.getLogger(__name__)
+
+
+DIAS_ES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+
+
+def cargar_config():
+    try:
+        with open("config.json", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
 
 
 def calcular_fecha_objetivo():
@@ -191,7 +203,21 @@ def enviar_captura_telegram(page):
 
 
 def main():
+    global FRANJA_INICIO
+
     objetivo = calcular_fecha_objetivo()
+    dia_semana = DIAS_ES[objetivo.weekday()]
+    config = cargar_config()
+    conf_dia = config.get(dia_semana)
+
+    if conf_dia is not None and not conf_dia.get("activo", True):
+        log.info(f"El {dia_semana} está desactivado en config.json. No se reserva nada.")
+        return
+
+    if conf_dia is not None and conf_dia.get("hora"):
+        FRANJA_INICIO = conf_dia["hora"]
+        log.info(f"Hora configurada para {dia_semana}: {FRANJA_INICIO}")
+
     esperar_hasta_medianoche_madrid()
 
     with sync_playwright() as p:
