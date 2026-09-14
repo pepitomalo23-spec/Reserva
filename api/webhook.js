@@ -250,6 +250,11 @@ export default async function handler(req, res) {
     } else if (["/ayuda", "/start", "ayuda"].includes(textoLower)) {
       respuestaBot = TEXTO_AYUDA;
       await enviarMensaje(chatId, respuestaBot);
+    } else if (/\b(lunes|mi[ée]rcoles|viernes|s[áa]bado|domingo)\b/.test(textoLower)) {
+      respuestaBot =
+        "Ahora mismo solo tengo configurados los martes y jueves (según tu horario habitual de piscina). " +
+        "Si quieres que también gestione otro día, dímelo y lo añadimos al bot.";
+      await enviarMensaje(chatId, respuestaBot);
     } else {
       const historial = obtenerHistorial(cfg, chatId);
       const accion = await interpretarConIA(texto, historial);
