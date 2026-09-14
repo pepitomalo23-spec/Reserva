@@ -11,14 +11,6 @@
     "1322540799": [
       {
         "role": "user",
-        "texto": "No hazlo ya reserva"
-      },
-      {
-        "role": "model",
-        "texto": "Entendí que quieres algo, pero no me quedó claro el día o la hora 🤔\n\nComandos disponibles:\n/martes on – activar reserva del martes\n/martes off – desactivar reserva del martes\n/jueves on – activar reserva del jueves\n/jueves off – desactivar reserva del jueves\n/hora martes HH:MM – cambiar hora del martes\n/hora jueves HH:MM – cambiar hora del jueves\n/estado – ver configuración actual\n\nTambién puedes escribirme en lenguaje natural, p.ej. \"resérvame el martes a las 15:00\"."
-      },
-      {
-        "role": "user",
         "texto": "Reserva el miércoles a las 2"
       },
       {
@@ -40,6 +32,14 @@
       {
         "role": "model",
         "texto": "Aún no está hecha en la web, lo que he hecho es dejar programado el robot. \n\nLa reserva se ejecutará automáticamente el lunes a las 00:00 (justo dos días antes del miércoles) en el segundo exacto en que la web abra las plazas. ¡No tienes que hacer nada más, yo me encargo de todo!"
+      },
+      {
+        "role": "user",
+        "texto": "No resérvala para este miércoles"
+      },
+      {
+        "role": "model",
+        "texto": "✅ Reserva de los miércoles activada."
       }
     ]
   },
