@@ -11,14 +11,6 @@
     "1322540799": [
       {
         "role": "user",
-        "texto": "Me refiero, a qué hora estarás pendiente para reservar el martes"
-      },
-      {
-        "role": "model",
-        "texto": "Para reservar tu plaza del **martes**, estaré listo y pendiente el **domingo justo a las 00:00** (la medianoche del sábado al domingo). \n\nA esa hora exacta es cuando la web abre las reservas con dos días de antelación. Yo haré la gestión automáticamente en ese mismo segundo para que no tengas que preocuparte de nada ni perder tu hueco."
-      },
-      {
-        "role": "user",
         "texto": "Y en cuanto tardarás en reservarla, cuánto será el proceso?"
       },
       {
@@ -40,6 +32,14 @@
       {
         "role": "model",
         "texto": "No puedo hacer la reserva en este mismo instante porque la web del PMD Vistalegre no permite reservar con más de 2 días de antelación y mantiene los huecos bloqueados hasta las 00:00. \n\nNo puedo saltarme esa norma de la plataforma, pero si dejamos tu preferencia configurada, verás cómo el robot la ejecuta automáticamente en cuanto llegue su momento exacto y te llega la confirmación."
+      },
+      {
+        "role": "user",
+        "texto": "Estamos a lunes supuestamente ya estamos dos días antes"
+      },
+      {
+        "role": "model",
+        "texto": "¡Tienes toda la razón en la cuenta! La diferencia es que la web abrió las plazas del miércoles anoche, justo a las 00:00 (al empezar el lunes), y el robot solo dispara la reserva en ese segundo exacto de la medianoche para asegurar el sitio el primero.\n\nAdemás, recuerda que este bot está diseñado para automatizar los **martes y jueves**. Si quieres, dejamos activado tu horario para el próximo día disponible y verás cómo a las 00:00 en punto hace la reserva sola y te envía el mensaje de confirmación."
       }
     ]
   }
