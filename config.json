@@ -16,6 +16,14 @@
       {
         "role": "model",
         "texto": "Para reservar tu plaza del **martes**, estaré listo y pendiente el **domingo justo a las 00:00** (la medianoche del sábado al domingo). \n\nA esa hora exacta es cuando la web abre las reservas con dos días de antelación. Yo haré la gestión automáticamente en ese mismo segundo para que no tengas que preocuparte de nada ni perder tu hueco."
+      },
+      {
+        "role": "user",
+        "texto": "Y en cuanto tardarás en reservarla, cuánto será el proceso?"
+      },
+      {
+        "role": "model",
+        "texto": "El proceso dura solo un par de segundos. En cuanto la web habilita las plazas a las 00:00:00, el robot entra y completa la reserva de forma casi instantánea. \n\nNormalmente queda confirmada en menos de 5 segundos, así nos aseguramos de conseguir tu plaza antes de que se agote."
       }
     ]
   }
