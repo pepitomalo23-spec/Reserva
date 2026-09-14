@@ -136,6 +136,10 @@ async function leerConfig() {
     headers: { Authorization: `Bearer ${GH_TOKEN}`, Accept: "application/vnd.github+json" },
   });
   const data = await r.json();
+  if (!r.ok || !data.content) {
+    console.error("Error leyendo config.json de GitHub. Status:", r.status, "Body:", JSON.stringify(data));
+    throw new Error(`No se pudo leer config.json (status ${r.status})`);
+  }
   const contenido = Buffer.from(data.content, "base64").toString("utf-8");
   return { cfg: JSON.parse(contenido), sha: data.sha };
 }
