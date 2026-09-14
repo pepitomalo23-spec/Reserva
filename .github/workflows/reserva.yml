@@ -2,10 +2,9 @@ name: Reserva automática de piscina
 
 on:
   schedule:
-    # 21:45 UTC los domingos -> reserva el MARTES (2 días después)
-    - cron: "45 21 * * 0"
-    # 21:45 UTC los martes -> reserva el JUEVES (2 días después)
-    - cron: "45 21 * * 2"
+    # 21:45 UTC todos los días -> comprueba si el día de dentro de 2 días
+    # está activado en config.json, y si es así, lo reserva.
+    - cron: "45 21 * * *"
   workflow_dispatch: {}   # permite lanzarlo a mano desde GitHub para probar
 
 jobs:

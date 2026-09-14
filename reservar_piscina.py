@@ -210,8 +210,8 @@ def main():
     config = cargar_config()
     conf_dia = config.get(dia_semana)
 
-    if conf_dia is not None and not conf_dia.get("activo", True):
-        log.info(f"El {dia_semana} está desactivado en config.json. No se reserva nada.")
+    if conf_dia is None or not conf_dia.get("activo", False):
+        log.info(f"El {dia_semana} no está activado en config.json. No se reserva nada.")
         return
 
     if conf_dia is not None and conf_dia.get("hora"):
