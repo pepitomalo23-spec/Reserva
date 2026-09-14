@@ -24,6 +24,14 @@
       {
         "role": "model",
         "texto": "El proceso dura solo un par de segundos. En cuanto la web habilita las plazas a las 00:00:00, el robot entra y completa la reserva de forma casi instantánea. \n\nNormalmente queda confirmada en menos de 5 segundos, así nos aseguramos de conseguir tu plaza antes de que se agote."
+      },
+      {
+        "role": "user",
+        "texto": "Y puedes hacer que siempre que reserves me envíes un mensaje de reservado"
+      },
+      {
+        "role": "model",
+        "texto": "¡Por supuesto! Cada vez que complete una reserva a las 00:00, te enviaré un mensaje por aquí al instante para confirmarte que ya tienes tu plaza asegurada. \n\nAsí sabrás inmediatamente que todo ha salido bien sin tener que entrar a comprobarlo por tu cuenta."
       }
     ]
   }
