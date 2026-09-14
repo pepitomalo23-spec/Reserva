@@ -11,14 +11,6 @@
     "1322540799": [
       {
         "role": "user",
-        "texto": "Por ejemplo si te digo hazme una reserva para el miércoles a las 1, me lo podrías hacer ya para ver si funciona?"
-      },
-      {
-        "role": "model",
-        "texto": "No puedo hacer la reserva en este mismo instante porque la web del PMD Vistalegre no permite reservar con más de 2 días de antelación y mantiene los huecos bloqueados hasta las 00:00. \n\nNo puedo saltarme esa norma de la plataforma, pero si dejamos tu preferencia configurada, verás cómo el robot la ejecuta automáticamente en cuanto llegue su momento exacto y te llega la confirmación."
-      },
-      {
-        "role": "user",
         "texto": "Estamos a lunes supuestamente ya estamos dos días antes"
       },
       {
@@ -40,7 +32,19 @@
       {
         "role": "model",
         "texto": "No entendí ese mensaje 🤔\n\nComandos disponibles:\n/martes on – activar reserva del martes\n/martes off – desactivar reserva del martes\n/jueves on – activar reserva del jueves\n/jueves off – desactivar reserva del jueves\n/hora martes HH:MM – cambiar hora del martes\n/hora jueves HH:MM – cambiar hora del jueves\n/estado – ver configuración actual\n\nTambién puedes escribirme en lenguaje natural, p.ej. \"resérvame el martes a las 15:00\"."
+      },
+      {
+        "role": "user",
+        "texto": "Reserva el miércoles a las 2"
+      },
+      {
+        "role": "model",
+        "texto": "✅ Reserva de los miércoles activada."
       }
     ]
+  },
+  "miércoles": {
+    "activo": true,
+    "hora": "13:00"
   }
 }
