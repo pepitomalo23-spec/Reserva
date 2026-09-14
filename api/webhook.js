@@ -137,9 +137,6 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Respondemos ya a Telegram para que no reintente; el resto sigue en segundo plano
-  res.status(200).send("ok");
-
   try {
     const { cfg, sha } = await leerConfig();
     let cambiado = false;
@@ -199,4 +196,6 @@ export default async function handler(req, res) {
   } catch (e) {
     console.error("Error procesando update:", e);
   }
+
+  res.status(200).send("ok");
 }
