@@ -6,5 +6,17 @@
   "jueves": {
     "activo": true,
     "hora": "13:00"
+  },
+  "_historial": {
+    "1322540799": [
+      {
+        "role": "user",
+        "texto": "Me refiero, a qué hora estarás pendiente para reservar el martes"
+      },
+      {
+        "role": "model",
+        "texto": "Para reservar tu plaza del **martes**, estaré listo y pendiente el **domingo justo a las 00:00** (la medianoche del sábado al domingo). \n\nA esa hora exacta es cuando la web abre las reservas con dos días de antelación. Yo haré la gestión automáticamente en ese mismo segundo para que no tengas que preocuparte de nada ni perder tu hueco."
+      }
+    ]
   }
 }
