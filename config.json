@@ -11,14 +11,6 @@
     "1322540799": [
       {
         "role": "user",
-        "texto": "Estamos a lunes supuestamente ya estamos dos días antes"
-      },
-      {
-        "role": "model",
-        "texto": "¡Tienes toda la razón en la cuenta! La diferencia es que la web abrió las plazas del miércoles anoche, justo a las 00:00 (al empezar el lunes), y el robot solo dispara la reserva en ese segundo exacto de la medianoche para asegurar el sitio el primero.\n\nAdemás, recuerda que este bot está diseñado para automatizar los **martes y jueves**. Si quieres, dejamos activado tu horario para el próximo día disponible y verás cómo a las 00:00 en punto hace la reserva sola y te envía el mensaje de confirmación."
-      },
-      {
-        "role": "user",
         "texto": "No hazlo ya reserva"
       },
       {
@@ -40,6 +32,14 @@
       {
         "role": "model",
         "texto": "✅ Reserva de los miércoles activada."
+      },
+      {
+        "role": "user",
+        "texto": "Has echo ya la reserva?"
+      },
+      {
+        "role": "model",
+        "texto": "Aún no está hecha en la web, lo que he hecho es dejar programado el robot. \n\nLa reserva se ejecutará automáticamente el lunes a las 00:00 (justo dos días antes del miércoles) en el segundo exacto en que la web abra las plazas. ¡No tienes que hacer nada más, yo me encargo de todo!"
       }
     ]
   },
