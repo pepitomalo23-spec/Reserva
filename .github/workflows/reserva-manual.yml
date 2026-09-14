@@ -1,0 +1,46 @@
+name: Reserva puntual (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      fecha:
+        description: "Fecha a reservar, formato YYYY-MM-DD"
+        required: true
+      hora:
+        description: "Hora del tramo, formato HH:MM"
+        required: false
+        default: "13:00"
+
+jobs:
+  reservar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: |
+          pip install playwright requests
+          playwright install --with-deps chromium
+
+      - name: Ejecutar reserva puntual
+        env:
+          IMDECO_USER: ${{ secrets.IMDECO_USER }}
+          IMDECO_PASS: ${{ secrets.IMDECO_PASS }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FECHA_MANUAL: ${{ github.event.inputs.fecha }}
+          HORA_MANUAL: ${{ github.event.inputs.hora }}
+          OMITIR_ESPERA: "1"
+        run: python reservar_piscina.py
+
+      - name: Guardar capturas si algo falla
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capturas-error-manual
+          path: "*.png"

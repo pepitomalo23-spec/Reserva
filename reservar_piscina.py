@@ -40,6 +40,8 @@ USUARIO = os.environ.get("IMDECO_USER")
 CONTRASENA = os.environ.get("IMDECO_PASS")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+FECHA_MANUAL = os.environ.get("FECHA_MANUAL")   # formato YYYY-MM-DD, para reservas puntuales pedidas por Telegram
+HORA_MANUAL = os.environ.get("HORA_MANUAL")     # formato HH:MM, opcional junto a FECHA_MANUAL
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 log = logging.getLogger(__name__)
@@ -62,7 +64,14 @@ def calcular_fecha_objetivo():
     de "hoy" en el momento en que arranca el script (todavia el dia
     anterior al que realmente vamos a reservar). Si se calculase
     despues de la espera, saldria un dia equivocado.
+
+    Si FECHA_MANUAL está definida (reserva puntual pedida por Telegram),
+    se usa esa fecha exacta en vez de calcular "hoy + 2 días".
     """
+    if FECHA_MANUAL:
+        objetivo = dt.datetime.strptime(FECHA_MANUAL, "%Y-%m-%d").date()
+        log.info(f"Fecha manual (reserva puntual): {objetivo.strftime('%d/%m/%Y')}")
+        return objetivo
     objetivo = date.today() + timedelta(days=DIAS_ANTELACION)
     log.info(f"Fecha objetivo calculada: {objetivo.strftime('%d/%m/%Y')}")
     return objetivo
@@ -180,6 +189,20 @@ def confirmar_compra(page):
     log.info("¡Reserva confirmada!")
 
 
+def enviar_mensaje_telegram(texto):
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+    import requests
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+            data={"chat_id": TELEGRAM_CHAT_ID, "text": texto},
+            timeout=15,
+        )
+    except Exception as e:
+        log.error(f"No se pudo avisar por Telegram: {e}")
+
+
 def enviar_captura_telegram(page):
     ruta = "confirmacion.png"
     page.screenshot(path=ruta, full_page=True)
@@ -207,16 +230,22 @@ def main():
 
     objetivo = calcular_fecha_objetivo()
     dia_semana = DIAS_ES[objetivo.weekday()]
-    config = cargar_config()
-    conf_dia = config.get(dia_semana)
 
-    if conf_dia is None or not conf_dia.get("activo", False):
-        log.info(f"El {dia_semana} no está activado en config.json. No se reserva nada.")
-        return
+    if FECHA_MANUAL:
+        log.info("Reserva puntual pedida por Telegram: se omite la comprobación de config.json")
+        if HORA_MANUAL:
+            FRANJA_INICIO = HORA_MANUAL
+    else:
+        config = cargar_config()
+        conf_dia = config.get(dia_semana)
 
-    if conf_dia is not None and conf_dia.get("hora"):
-        FRANJA_INICIO = conf_dia["hora"]
-        log.info(f"Hora configurada para {dia_semana}: {FRANJA_INICIO}")
+        if conf_dia is None or not conf_dia.get("activo", False):
+            log.info(f"El {dia_semana} no está activado en config.json. No se reserva nada.")
+            return
+
+        if conf_dia.get("hora"):
+            FRANJA_INICIO = conf_dia["hora"]
+            log.info(f"Hora configurada para {dia_semana}: {FRANJA_INICIO}")
 
     esperar_hasta_medianoche_madrid()
 
@@ -230,12 +259,20 @@ def main():
             if not seleccionar_tramo(page):
                 log.error("No se encontró ningún hueco libre en el tramo deseado")
                 page.screenshot(path="sin_hueco.png")
+                enviar_mensaje_telegram(
+                    f"⚠️ No he podido reservar el {dia_semana} {objetivo.strftime('%d/%m/%Y')} "
+                    f"a las {FRANJA_INICIO}: no había ningún hueco libre en ese tramo."
+                )
                 sys.exit(1)
             confirmar_compra(page)
             enviar_captura_telegram(page)
         except PWTimeout as e:
             log.error(f"Tiempo de espera agotado: {e}")
             page.screenshot(path="error.png")
+            enviar_mensaje_telegram(
+                f"⚠️ Fallo al intentar reservar el {dia_semana} {objetivo.strftime('%d/%m/%Y')}: "
+                "se agotó el tiempo de espera en la web. Revisa el log del workflow para más detalle."
+            )
             sys.exit(1)
         finally:
             browser.close()

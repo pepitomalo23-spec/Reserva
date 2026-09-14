@@ -33,7 +33,25 @@ const TEXTO_AYUDA =
   "/DIA off – desactivar reserva de ese día\n" +
   "/hora DIA HH:MM – cambiar la hora de ese día (p.ej. /hora jueves 15:00)\n" +
   "/estado – ver configuración actual\n\n" +
-  "También puedes escribirme en lenguaje natural, p.ej. \"resérvame el miércoles a las 20:00\" o \"quita el sábado\".";
+  "También puedes escribirme en lenguaje natural, p.ej. \"resérvame el miércoles a las 20:00\" o \"quita el sábado\".\n\n" +
+  "Y si necesitas una reserva puntual YA (fuera de tu rutina habitual), dime algo como " +
+  "\"resérvame ya el miércoles 16 a las 13:00\".";
+
+function fechaHoyMadrid() {
+  // Formato YYYY-MM-DD en la zona horaria de Madrid
+  const partes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const obj = Object.fromEntries(partes.map((p) => [p.type, p.value]));
+  return `${obj.year}-${obj.month}-${obj.day}`;
+}
+
+function promptSistemaConFecha() {
+  return `${PROMPT_SISTEMA}\n\nHoy es ${fechaHoyMadrid()} (zona horaria de Madrid). Usa esta fecha como referencia para calcular fechas relativas ("mañana", "el próximo miércoles", "el 16 de septiembre", etc.).`;
+}
 
 const PROMPT_SISTEMA = `Eres el intérprete de un bot de Telegram que gestiona reservas
 de piscina/gimnasio. El usuario te escribe frases en español natural, y puede que
@@ -42,22 +60,27 @@ Tu única tarea es traducir el ÚLTIMO mensaje del usuario a UNA acción, y resp
 EXCLUSIVAMENTE con un objeto JSON (sin markdown, sin texto adicional, sin \`\`\`),
 con esta forma exacta:
 
-{"accion": "activar" | "desactivar" | "cambiar_hora" | "estado" | "ayuda" | "pregunta" | "desconocido",
+{"accion": "activar" | "desactivar" | "cambiar_hora" | "estado" | "ayuda" | "pregunta" | "reservar_ahora" | "desconocido",
  "dia": "lunes" | "martes" | "miércoles" | "jueves" | "viernes" | "sábado" | "domingo" | null,
- "hora": "HH:MM" | null}
+ "hora": "HH:MM" | null,
+ "fecha": "YYYY-MM-DD" | null}
 
 Reglas:
 - Puede ser CUALQUIER día de la semana, no hay restricción de días.
-- Si el usuario pide reservar/activar un día -> "activar".
-- Si pide cancelar/desactivar/quitar un día -> "desactivar".
-- Si pide cambiar la hora -> "cambiar_hora" y rellena "hora" en formato HH:MM.
+- Si el usuario pide activar un día de forma RECURRENTE (todas las semanas) -> "activar".
+- Si pide cancelar/desactivar/quitar un día de forma recurrente -> "desactivar".
+- Si pide cambiar la hora de la rutina habitual -> "cambiar_hora" y rellena "hora".
 - Si pide ver el estado/configuración actual -> "estado".
 - Si pide ayuda o no sabe qué hacer -> "ayuda".
-- Si hace una pregunta sobre CÓMO funciona el sistema (cuándo se reserva realmente,
-  qué pasa si activa un día, en qué momento se ejecuta, dudas, curiosidad,
-  aclaraciones sobre un mensaje anterior tuyo) sin pedir cambiar nada -> "pregunta".
+- Si hace una pregunta sobre CÓMO funciona el sistema, sin pedir cambiar nada -> "pregunta".
+- Si pide una reserva PUNTUAL, para una fecha o día concreto, YA/AHORA MISMO,
+  fuera de su rutina habitual (p.ej. "resérvame ya el miércoles 16", "reserva
+  ahora para mañana a las 15:00", avisando de que "ya puedes reservar" ese
+  día) -> "reservar_ahora", calcula "fecha" en formato YYYY-MM-DD a partir
+  de la fecha de hoy que te doy y del día/fecha que mencione, y "hora" si la
+  da (si no, usa null y se usará la hora por defecto).
 - Si no entiendes la frase o no tiene relación con esto -> "desconocido".
-- "hora" y "dia" van a null cuando no apliquen.
+- Los campos que no apliquen van a null.
 - Responde SOLO el JSON, nada más.`;
 
 const DOC_SISTEMA = `Eres el asistente de un bot de Telegram para reservar piscina en
@@ -77,6 +100,11 @@ sin tecnicismos innecesarios):
   usuario tenga que hacer nada más.
 - El usuario puede cambiar esto en cualquier momento escribiendo en lenguaje
   natural o con comandos como /miercoles on, /hora jueves 15:00, /estado, etc.
+- Además, el usuario puede pedir una reserva PUNTUAL inmediata para una fecha
+  concreta (fuera de su rutina habitual), diciendo algo como "resérvame ya
+  el miércoles 16 a las 13:00". Esto lanza el robot en el momento, sin
+  esperar a las 00:00, aunque solo funcionará si la web ya tiene ese hueco
+  abierto (recuerda: máximo 2 días de antelación).
 
 Responde solo en texto normal (nada de JSON), en español, tuteando al usuario.`;
 
@@ -181,6 +209,31 @@ async function responderPregunta(texto, historial) {
   }
 }
 
+async function dispararReservaManual(fecha, hora) {
+  const { GH_TOKEN, GH_REPO } = process.env;
+  const r = await fetch(
+    `https://api.github.com/repos/${GH_REPO}/actions/workflows/reserva-manual.yml/dispatches`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${GH_TOKEN}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ref: "main",
+        inputs: { fecha, hora: hora || "13:00" },
+      }),
+    }
+  );
+  if (!r.ok) {
+    const cuerpo = await r.text();
+    console.error("Error al disparar reserva manual:", r.status, cuerpo);
+    return false;
+  }
+  return true;
+}
+
 async function interpretarConIA(texto, historial) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
@@ -191,7 +244,7 @@ async function interpretarConIA(texto, historial) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          system_instruction: { parts: [{ text: PROMPT_SISTEMA }] },
+          system_instruction: { parts: [{ text: promptSistemaConFecha() }] },
           contents: [...historialAContents(historial), { role: "user", parts: [{ text: texto }] }],
           generationConfig: { temperature: 0, responseMimeType: "application/json" },
         }),
@@ -212,10 +265,20 @@ async function interpretarConIA(texto, historial) {
     const salida = data.candidates[0].content.parts[0].text;
     const accion = JSON.parse(salida);
 
-    const accionesValidas = ["activar", "desactivar", "cambiar_hora", "estado", "ayuda", "pregunta", "desconocido"];
+    const accionesValidas = [
+      "activar",
+      "desactivar",
+      "cambiar_hora",
+      "estado",
+      "ayuda",
+      "pregunta",
+      "reservar_ahora",
+      "desconocido",
+    ];
     if (!accionesValidas.includes(accion.accion)) return null;
     accion.dia = accion.dia ? diaCanonico(accion.dia) : null;
     if (accion.hora && !/^\d{1,2}:\d{2}$/.test(accion.hora)) accion.hora = null;
+    if (accion.fecha && !/^\d{4}-\d{2}-\d{2}$/.test(accion.fecha)) accion.fecha = null;
     return accion;
   } catch (e) {
     console.error("Error consultando Gemini:", e);
@@ -308,6 +371,19 @@ export default async function handler(req, res) {
         await enviarMensaje(chatId, respuestaBot);
       } else if (accion.accion === "pregunta") {
         respuestaBot = await responderPregunta(texto, historial);
+        await enviarMensaje(chatId, respuestaBot);
+      } else if (accion.accion === "reservar_ahora" && accion.fecha) {
+        const ok = await dispararReservaManual(accion.fecha, accion.hora);
+        if (ok) {
+          respuestaBot =
+            `🚀 Marchando: he lanzado una reserva puntual para el ${accion.fecha} ` +
+            `a las ${accion.hora || "13:00"}. Tardará unos minutos en completarse (o fallará ` +
+            `si la web aún no tiene ese hueco abierto); te aviso por aquí en cuanto termine.`;
+        } else {
+          respuestaBot =
+            "❌ No he podido lanzar la reserva puntual (fallo al hablar con GitHub). " +
+            "Puedes intentarlo también a mano desde Actions → \"Reserva puntual (manual)\".";
+        }
         await enviarMensaje(chatId, respuestaBot);
       } else {
         respuestaBot =
