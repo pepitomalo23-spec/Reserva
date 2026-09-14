@@ -32,6 +32,14 @@
       {
         "role": "model",
         "texto": "¡Por supuesto! Cada vez que complete una reserva a las 00:00, te enviaré un mensaje por aquí al instante para confirmarte que ya tienes tu plaza asegurada. \n\nAsí sabrás inmediatamente que todo ha salido bien sin tener que entrar a comprobarlo por tu cuenta."
+      },
+      {
+        "role": "user",
+        "texto": "Por ejemplo si te digo hazme una reserva para el miércoles a las 1, me lo podrías hacer ya para ver si funciona?"
+      },
+      {
+        "role": "model",
+        "texto": "No puedo hacer la reserva en este mismo instante porque la web del PMD Vistalegre no permite reservar con más de 2 días de antelación y mantiene los huecos bloqueados hasta las 00:00. \n\nNo puedo saltarme esa norma de la plataforma, pero si dejamos tu preferencia configurada, verás cómo el robot la ejecuta automáticamente en cuanto llegue su momento exacto y te llega la confirmación."
       }
     ]
   }
