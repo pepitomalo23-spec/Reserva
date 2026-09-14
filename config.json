@@ -11,14 +11,6 @@
     "1322540799": [
       {
         "role": "user",
-        "texto": "Y en cuanto tardarás en reservarla, cuánto será el proceso?"
-      },
-      {
-        "role": "model",
-        "texto": "El proceso dura solo un par de segundos. En cuanto la web habilita las plazas a las 00:00:00, el robot entra y completa la reserva de forma casi instantánea. \n\nNormalmente queda confirmada en menos de 5 segundos, así nos aseguramos de conseguir tu plaza antes de que se agote."
-      },
-      {
-        "role": "user",
         "texto": "Y puedes hacer que siempre que reserves me envíes un mensaje de reservado"
       },
       {
@@ -40,6 +32,14 @@
       {
         "role": "model",
         "texto": "¡Tienes toda la razón en la cuenta! La diferencia es que la web abrió las plazas del miércoles anoche, justo a las 00:00 (al empezar el lunes), y el robot solo dispara la reserva en ese segundo exacto de la medianoche para asegurar el sitio el primero.\n\nAdemás, recuerda que este bot está diseñado para automatizar los **martes y jueves**. Si quieres, dejamos activado tu horario para el próximo día disponible y verás cómo a las 00:00 en punto hace la reserva sola y te envía el mensaje de confirmación."
+      },
+      {
+        "role": "user",
+        "texto": "No hazlo ya reserva"
+      },
+      {
+        "role": "model",
+        "texto": "Entendí que quieres algo, pero no me quedó claro el día o la hora 🤔\n\nComandos disponibles:\n/martes on – activar reserva del martes\n/martes off – desactivar reserva del martes\n/jueves on – activar reserva del jueves\n/jueves off – desactivar reserva del jueves\n/hora martes HH:MM – cambiar hora del martes\n/hora jueves HH:MM – cambiar hora del jueves\n/estado – ver configuración actual\n\nTambién puedes escribirme en lenguaje natural, p.ej. \"resérvame el martes a las 15:00\"."
       }
     ]
   }
