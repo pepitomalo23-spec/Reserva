@@ -99,6 +99,17 @@ async function interpretarConIA(texto) {
       }
     );
     const data = await r.json();
+
+    if (!r.ok || !data.candidates || !data.candidates[0]) {
+      console.error(
+        "Respuesta inesperada de Gemini. Status:",
+        r.status,
+        "Body:",
+        JSON.stringify(data)
+      );
+      return null;
+    }
+
     const salida = data.candidates[0].content.parts[0].text;
     const accion = JSON.parse(salida);
 
