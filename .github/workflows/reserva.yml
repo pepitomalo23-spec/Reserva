@@ -2,34 +2,61 @@ name: Reserva automática de piscina
 
 on:
   schedule:
-    # 21:45 UTC todos los días -> comprueba si el día de dentro de 2 días
-    # está activado en config.json, y si es así, lo reserva.
-    - cron: "45 21 * * *"
+    # Corre cada 5 minutos durante la franja donde puede caer la medianoche
+    # de Madrid (22:00 UTC en verano/CEST, 23:00 UTC en invierno/CET).
+    # El propio job comprueba en el primer paso si "ahora" está dentro de
+    # los primeros minutos tras esa medianoche; si no lo está, no hace
+    # nada más (ni instala Playwright ni nada pesado). Esto hace que un
+    # retraso puntual del cron de GitHub Actions (algo que puede pasar)
+    # no rompa nada: simplemente lo coge en la siguiente pasada, unos
+    # minutos después, en vez de intentarlo tarde o pronto de más.
+    - cron: "*/5 21,22,23 * * *"
   workflow_dispatch: {}   # permite lanzarlo a mano desde GitHub para probar
 
 jobs:
   reservar:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
+      - name: Comprobar si estamos justo tras la medianoche de Madrid
+        id: ventana
+        run: |
+          python3 - <<'PYEOF'
+          import datetime as dt
+          import os
+          from zoneinfo import ZoneInfo
+
+          tz = ZoneInfo("Europe/Madrid")
+          ahora = dt.datetime.now(tz)
+          segundos_desde_medianoche = ahora.hour * 3600 + ahora.minute * 60 + ahora.second
+          en_ventana = segundos_desde_medianoche <= 600  # 10 minutos de margen
+
+          print(f"Hora Madrid ahora: {ahora.strftime('%H:%M:%S')} -> en_ventana={en_ventana}")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"en_ventana={'true' if en_ventana else 'false'}\n")
+          PYEOF
+
       - uses: actions/setup-python@v5
+        if: steps.ventana.outputs.en_ventana == 'true' || github.event_name == 'workflow_dispatch'
         with:
           python-version: "3.12"
 
       - name: Instalar dependencias
+        if: steps.ventana.outputs.en_ventana == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           pip install playwright requests
           playwright install --with-deps chromium
 
       - name: Ejecutar reserva
+        if: steps.ventana.outputs.en_ventana == 'true' || github.event_name == 'workflow_dispatch'
         env:
           IMDECO_USER: ${{ secrets.IMDECO_USER }}
           IMDECO_PASS: ${{ secrets.IMDECO_PASS }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          OMITIR_ESPERA: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
         run: python reservar_piscina.py
 
       - name: Guardar capturas si algo falla

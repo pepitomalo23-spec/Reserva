@@ -19,11 +19,10 @@ INSTALACION LOCAL (solo para pruebas manuales):
 
 import os
 import sys
-import time
 import json
 import logging
 import datetime as dt
-from datetime import date, timedelta
+from datetime import timedelta
 from zoneinfo import ZoneInfo
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
@@ -34,7 +33,6 @@ ACTIVIDAD = "Piscina Medio Día"
 FRANJA_INICIO = "13:00"            # hora de inicio del tramo que quieres reservar
 DIAS_ANTELACION = 2                # la web permite reservar como maximo 2 dias antes
 MODO_VISIBLE = False               # ponlo en True en local para ver el navegador
-MARGEN_MAXIMO_ESPERA_SEG = 5400    # 1h30 - cubre el cambio de hora verano/invierno
 
 USUARIO = os.environ.get("IMDECO_USER")
 CONTRASENA = os.environ.get("IMDECO_PASS")
@@ -60,51 +58,20 @@ def cargar_config():
 
 def calcular_fecha_objetivo():
     """
-    OJO: esto se calcula ANTES de esperar a medianoche, usando la fecha
-    de "hoy" en el momento en que arranca el script (todavia el dia
-    anterior al que realmente vamos a reservar). Si se calculase
-    despues de la espera, saldria un dia equivocado.
-
     Si FECHA_MANUAL está definida (reserva puntual pedida por Telegram),
-    se usa esa fecha exacta en vez de calcular "hoy + 2 días".
+    se usa esa fecha exacta. Si no, se calcula como "hoy (en Madrid) + 2
+    días". Usamos SIEMPRE la fecha de Madrid (no la del sistema, que en
+    GitHub Actions es UTC) para evitar desajustes de día en la franja
+    22:00-00:00 UTC, que es justamente cuando corre este script.
     """
     if FECHA_MANUAL:
         objetivo = dt.datetime.strptime(FECHA_MANUAL, "%Y-%m-%d").date()
         log.info(f"Fecha manual (reserva puntual): {objetivo.strftime('%d/%m/%Y')}")
         return objetivo
-    objetivo = date.today() + timedelta(days=DIAS_ANTELACION)
-    log.info(f"Fecha objetivo calculada: {objetivo.strftime('%d/%m/%Y')}")
+    hoy_madrid = dt.datetime.now(ZoneInfo("Europe/Madrid")).date()
+    objetivo = hoy_madrid + timedelta(days=DIAS_ANTELACION)
+    log.info(f"Fecha objetivo calculada (hoy Madrid={hoy_madrid}): {objetivo.strftime('%d/%m/%Y')}")
     return objetivo
-
-
-def esperar_hasta_medianoche_madrid():
-    if os.environ.get("OMITIR_ESPERA") == "1":
-        log.info("OMITIR_ESPERA=1 -> me salto la espera a medianoche (modo prueba)")
-        return
-
-    tz = ZoneInfo("Europe/Madrid")
-    ahora = dt.datetime.now(tz)
-    hoy_medianoche = dt.datetime.combine(ahora.date(), dt.time(0, 0, 0), tzinfo=tz)
-
-    if ahora < hoy_medianoche + dt.timedelta(seconds=10):
-        log.info("Ya es prácticamente medianoche, no hace falta esperar.")
-        return
-
-    proxima_medianoche = hoy_medianoche + dt.timedelta(days=1)
-    segundos = (proxima_medianoche - ahora).total_seconds()
-
-    if segundos <= 0:
-        return
-    if segundos > MARGEN_MAXIMO_ESPERA_SEG:
-        log.warning(
-            f"Faltan {segundos:.0f}s para medianoche, más de lo esperado. "
-            "Sigo adelante igualmente por seguridad."
-        )
-        return
-
-    log.info(f"Esperando {segundos:.0f}s hasta las 00:00 hora de Madrid...")
-    time.sleep(segundos)
-    log.info("¡Medianoche! Continuando con la reserva.")
 
 
 def login(page):
@@ -246,8 +213,6 @@ def main():
         if conf_dia.get("hora"):
             FRANJA_INICIO = conf_dia["hora"]
             log.info(f"Hora configurada para {dia_semana}: {FRANJA_INICIO}")
-
-    esperar_hasta_medianoche_madrid()
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=not MODO_VISIBLE)

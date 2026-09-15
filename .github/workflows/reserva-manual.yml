@@ -35,7 +35,6 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           FECHA_MANUAL: ${{ github.event.inputs.fecha }}
           HORA_MANUAL: ${{ github.event.inputs.hora }}
-          OMITIR_ESPERA: "1"
         run: python reservar_piscina.py
 
       - name: Guardar capturas si algo falla
