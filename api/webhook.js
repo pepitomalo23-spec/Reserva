@@ -60,7 +60,7 @@ Tu única tarea es traducir el ÚLTIMO mensaje del usuario a UNA acción, y resp
 EXCLUSIVAMENTE con un objeto JSON (sin markdown, sin texto adicional, sin \`\`\`),
 con esta forma exacta:
 
-{"accion": "activar" | "desactivar" | "cambiar_hora" | "estado" | "ayuda" | "pregunta" | "reservar_ahora" | "desconocido",
+{"accion": "activar" | "desactivar" | "cambiar_hora" | "estado" | "ayuda" | "pregunta" | "reservar_ahora" | "estado_reserva" | "desconocido",
  "dia": "lunes" | "martes" | "miércoles" | "jueves" | "viernes" | "sábado" | "domingo" | null,
  "hora": "HH:MM" | null,
  "fecha": "YYYY-MM-DD" | null}
@@ -70,9 +70,12 @@ Reglas:
 - Si el usuario pide activar un día de forma RECURRENTE (todas las semanas) -> "activar".
 - Si pide cancelar/desactivar/quitar un día de forma recurrente -> "desactivar".
 - Si pide cambiar la hora de la rutina habitual -> "cambiar_hora" y rellena "hora".
-- Si pide ver el estado/configuración actual -> "estado".
+- Si pide ver la CONFIGURACIÓN (qué días están activados) -> "estado".
 - Si pide ayuda o no sabe qué hacer -> "ayuda".
 - Si hace una pregunta sobre CÓMO funciona el sistema, sin pedir cambiar nada -> "pregunta".
+- Si pregunta si una reserva CONCRETA se ha hecho/confirmado de verdad ("¿está
+  reservado?", "¿se reservó?", "¿ha salido bien?", "¿lo has confirmado?") ->
+  "estado_reserva".
 - Si pide una reserva PUNTUAL, para una fecha o día concreto, YA/AHORA MISMO,
   fuera de su rutina habitual (p.ej. "resérvame ya el miércoles 16", "reserva
   ahora para mañana a las 15:00", avisando de que "ya puedes reservar" ese
@@ -213,6 +216,55 @@ async function responderPregunta(texto, historial) {
   }
 }
 
+async function consultarUltimaReserva() {
+  const { GH_TOKEN, GH_REPO } = process.env;
+  const headers = { Authorization: `Bearer ${GH_TOKEN}`, Accept: "application/vnd.github+json" };
+
+  try {
+    const [rAuto, rManual] = await Promise.all([
+      fetch(`https://api.github.com/repos/${GH_REPO}/actions/workflows/reserva.yml/runs?per_page=1`, { headers }),
+      fetch(`https://api.github.com/repos/${GH_REPO}/actions/workflows/reserva-manual.yml/runs?per_page=1`, { headers }),
+    ]);
+    const [dAuto, dManual] = await Promise.all([rAuto.json(), rManual.json()]);
+    const runs = [...(dAuto.workflow_runs || []), ...(dManual.workflow_runs || [])];
+    if (runs.length === 0) return null;
+
+    // La más reciente de las dos
+    runs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    const ultima = runs[0];
+    return {
+      status: ultima.status, // "completed" | "in_progress" | "queued"
+      conclusion: ultima.conclusion, // "success" | "failure" | null
+      created_at: ultima.created_at,
+      html_url: ultima.html_url,
+    };
+  } catch (e) {
+    console.error("Error consultando última reserva:", e);
+    return null;
+  }
+}
+
+function textoEstadoReserva(info) {
+  if (!info) {
+    return "No he podido consultar el historial de ejecuciones ahora mismo.";
+  }
+  const fecha = new Date(info.created_at).toLocaleString("es-ES", {
+    timeZone: "Europe/Madrid",
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+  if (info.status !== "completed") {
+    return `⏳ El robot está trabajando en ello ahora mismo (lanzado el ${fecha}). Dame un par de minutos y pregúntame otra vez.`;
+  }
+  if (info.conclusion === "success") {
+    return `✅ Sí, la última reserva (lanzada el ${fecha}) se completó correctamente.`;
+  }
+  return (
+    `❌ No, la última reserva (lanzada el ${fecha}) falló. ` +
+    `Puedes ver el detalle en GitHub → Actions, o pedirme que lo intente de nuevo.`
+  );
+}
+
 async function dispararReservaManual(fecha, hora) {
   const { GH_TOKEN, GH_REPO } = process.env;
   const r = await fetch(
@@ -277,6 +329,7 @@ async function interpretarConIA(texto, historial) {
       "ayuda",
       "pregunta",
       "reservar_ahora",
+      "estado_reserva",
       "desconocido",
     ];
     if (!accionesValidas.includes(accion.accion)) return null;
@@ -388,6 +441,10 @@ export default async function handler(req, res) {
             "❌ No he podido lanzar la reserva puntual (fallo al hablar con GitHub). " +
             "Puedes intentarlo también a mano desde Actions → \"Reserva puntual (manual)\".";
         }
+        await enviarMensaje(chatId, respuestaBot);
+      } else if (accion.accion === "estado_reserva") {
+        const info = await consultarUltimaReserva();
+        respuestaBot = textoEstadoReserva(info);
         await enviarMensaje(chatId, respuestaBot);
       } else {
         respuestaBot =
