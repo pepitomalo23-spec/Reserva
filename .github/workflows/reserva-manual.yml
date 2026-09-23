@@ -11,6 +11,9 @@ on:
         required: false
         default: "13:00"
 
+permissions:
+  contents: read
+
 jobs:
   reservar:
     runs-on: ubuntu-latest
@@ -27,7 +30,7 @@ jobs:
           pip install playwright requests
           playwright install --with-deps chromium
 
-      - name: Ejecutar reserva puntual
+      - name: Ejecutar reserva ${{ github.event.inputs.fecha }}
         env:
           IMDECO_USER: ${{ secrets.IMDECO_USER }}
           IMDECO_PASS: ${{ secrets.IMDECO_PASS }}
@@ -42,4 +45,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: capturas-error-manual
-          path: "*.png"
+          path: |
+            *.png
+            *.html
