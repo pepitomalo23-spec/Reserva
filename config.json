@@ -11,14 +11,6 @@
     "1322540799": [
       {
         "role": "user",
-        "texto": "Resérvame el jueves a las 1"
-      },
-      {
-        "role": "model",
-        "texto": "✅ Reserva de los jueves activada."
-      },
-      {
-        "role": "user",
         "texto": "Resérvalo ya"
       },
       {
@@ -36,6 +28,14 @@
       {
         "role": "user",
         "texto": "Resérvame ahora para mañana a las 2"
+      },
+      {
+        "role": "model",
+        "texto": "No entendí ese mensaje 🤔\n\nPuedo gestionar la reserva de cualquier día de la semana. Comandos disponibles:\n/DIA on – activar reserva de ese día (p.ej. /martes on)\n/DIA off – desactivar reserva de ese día\n/hora DIA HH:MM – cambiar la hora de ese día (p.ej. /hora jueves 15:00)\n/estado – ver configuración actual\n/reserva – ¿se completó la última reserva?\n\nTambién puedes escribirme en lenguaje natural, p.ej. \"resérvame el miércoles a las 20:00\" o \"quita el sábado\".\n\nY si necesitas una reserva puntual YA (fuera de tu rutina habitual), dime algo como \"resérvame ya el miércoles 16 a las 13:00\". Si ese día aún no se ha abierto en la web, lo dejo apuntado y el robot lo reserva a las 00:00 del día que se abra."
+      },
+      {
+        "role": "user",
+        "texto": "Resérvame ya el viernes 25 a las 13:00"
       },
       {
         "role": "model",
