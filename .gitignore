@@ -2,6 +2,3 @@ __pycache__/
 *.png
 *.html
 node_modules/
-!examen.html
-*.pdf
-tb_*.txt
