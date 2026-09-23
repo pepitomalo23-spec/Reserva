@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generar examen</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #1d2330; --muted: #6b7280;
+    --line: #e3e6eb; --accent: #d9480f; --accent-text: #ffffff; --ok: #1a7f37; --err: #c92a2a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14161b; --card: #1d2027; --text: #e8eaee; --muted: #9aa1ad;
+            --line: #2d313a; --accent: #ff6b2c; --accent-text: #14161b; --ok: #4ade80; --err: #ff8787; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: .95rem; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  .card h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
+  .tema { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--line); cursor: pointer; }
+  .tema:first-of-type { border-top: 0; }
+  .tema input { margin-top: 4px; width: 18px; height: 18px; accent-color: var(--accent); flex: none; }
+  .tema .n { color: var(--muted); font-size: .85rem; }
+  .fila { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; }
+  .fila label { flex: 1; }
+  input[type=number], input[type=password] {
+    width: 110px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); font-size: 1rem; }
+  .enlace { background: none; border: 0; color: var(--accent); font-size: .9rem; cursor: pointer; padding: 0; }
+  button.principal { width: 100%; padding: 16px; font-size: 1.1rem; font-weight: 600; border: 0; border-radius: 12px;
+    background: var(--accent); color: var(--accent-text); cursor: pointer; }
+  button.principal:disabled { opacity: .55; cursor: wait; }
+  #estado { margin-top: 14px; min-height: 1.4em; text-align: center; }
+  #estado.ok { color: var(--ok); } #estado.err { color: var(--err); }
+  details { margin-top: 22px; color: var(--muted); font-size: .9rem; }
+  details button { margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🔥 Generar examen</h1>
+  <p class="sub">Elige temas y pulsa el botón. En unos minutos te llegan por Telegram el examen y las soluciones en PDF.</p>
+
+  <section class="card">
+    <h2>Temas <button class="enlace" id="todos" type="button" style="float:right">Marcar todos</button></h2>
+    <div id="temas">Cargando temas…</div>
+  </section>
+
+  <section class="card">
+    <h2>Opciones</h2>
+    <div class="fila"><label for="num">Número de preguntas</label><input id="num" type="number" min="1" max="200" value="30"></div>
+    <div class="fila"><label for="tb">Añadir preguntas de Tutorbomberos</label><input id="tb" type="checkbox" checked style="width:20px;height:20px;accent-color:var(--accent)"></div>
+    <div class="fila"><label for="pin">PIN</label><input id="pin" type="password" inputmode="numeric" autocomplete="current-password"></div>
+  </section>
+
+  <button class="principal" id="generar" type="button">Generar examen</button>
+  <p id="estado" role="status"></p>
+
+  <details>
+    <summary>Ajustes del robot de Tutorbomberos</summary>
+    <p>Si Tutorbomberos no devuelve preguntas, lanza un reconocimiento: el robot entra con tu usuario y te manda por Telegram capturas, el HTML y la lista de enlaces, para poder ajustar la navegación.</p>
+    <button class="enlace" id="reconocer" type="button">Lanzar reconocimiento de Tutorbomberos →</button>
+  </details>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const guardado = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } };
+
+function estado(texto, clase) { $("estado").textContent = texto; $("estado").className = clase || ""; }
+
+async function cargarTemas() {
+  try {
+    const r = await fetch("/api/examen");
+    const { temas } = await r.json();
+    const previos = JSON.parse(guardado("examen_temas") || "[]");
+    $("temas").innerHTML = "";
+    temas.forEach((t) => {
+      const fila = document.createElement("label");
+      fila.className = "tema";
+      const cb = document.createElement("input");
+      cb.type = "checkbox"; cb.value = t.id; cb.checked = previos.includes(t.id);
+      const txt = document.createElement("span");
+      txt.textContent = t.name + " ";
+      const n = document.createElement("span");
+      n.className = "n"; n.textContent = `(${t.preguntas} preguntas)`;
+      txt.appendChild(n);
+      fila.append(cb, txt);
+      $("temas").appendChild(fila);
+    });
+  } catch (e) {
+    $("temas").textContent = "No se pudieron cargar los temas. Recarga la página.";
+  }
+}
+
+async function lanzar(modo) {
+  const temas = [...document.querySelectorAll("#temas input:checked")].map((c) => c.value);
+  if (modo === "examen" && !temas.length) return estado("Marca al menos un tema.", "err");
+  if (!$("pin").value) return estado("Escribe el PIN.", "err");
+  guardado("examen_temas", JSON.stringify(temas));
+  guardado("examen_num", $("num").value);
+
+  $("generar").disabled = true;
+  estado(modo === "examen" ? "Enviando…" : "Lanzando reconocimiento…");
+  try {
+    const r = await fetch("/api/examen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin: $("pin").value, temas, num: $("num").value, tutorbomberos: $("tb").checked, modo }),
+    });
+    const datos = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(datos.error || `Error ${r.status}`);
+    estado(modo === "examen"
+      ? "✅ ¡En marcha! Te llega por Telegram en 2-5 minutos."
+      : "✅ Reconocimiento en marcha. Mira Telegram en unos minutos.", "ok");
+  } catch (e) {
+    estado("❌ " + e.message, "err");
+  } finally {
+    $("generar").disabled = false;
+  }
+}
+
+$("num").value = guardado("examen_num") || 30;
+$("generar").addEventListener("click", () => lanzar("examen"));
+$("reconocer").addEventListener("click", () => lanzar("reconocimiento"));
+$("todos").addEventListener("click", () => {
+  const cajas = [...document.querySelectorAll("#temas input")];
+  const marcar = cajas.some((c) => !c.checked);
+  cajas.forEach((c) => (c.checked = marcar));
+});
+cargarTemas();
+</script>
+</body>
+</html>

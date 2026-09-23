@@ -1,0 +1,26 @@
+{
+  "num_preguntas_por_defecto": 30,
+  "proporcion_tutorbomberos": 0.5,
+
+  "supabase": {
+    "url": "https://tsjaaqkvncgxqtpmlugv.supabase.co",
+    "clave_publica": "sb_publishable_F9-gdlx34vn7FQ_1hSHwcQ__L5EGMOS"
+  },
+
+  "tutorbomberos": {
+    "url_login": "https://tutorbomberos.es/TEST/index.jsp",
+    "selector_usuario": "",
+    "selector_contrasena": "",
+    "selector_boton_login": "",
+    "max_preguntas_por_tema": 60,
+
+    "temas": {
+      "Constitución Española de 1978": { "buscar": ["Constituci"], "url": "" },
+      "1/2004": { "buscar": ["1/2004", "Violencia de G"], "url": "" },
+      "3/2007 → Igualdad efectiva de mujeres y hombres": { "buscar": ["3/2007", "Igualdad efectiva"], "url": "" },
+      "12/2007 - igualdad de genero en las políticas publicas": { "buscar": ["12/2007", "Igualdad de g"], "url": "" },
+      "2/2002 - ley de Gestión de Emergencias en Andalucía": { "buscar": ["2/2002", "Emergencias en Andaluc"], "url": "" },
+      "5/2015 → (T.R.E.B.E.P) → Texto Refundido de la Ley del Estatuto Básico del Empleado Público": { "buscar": ["5/2015", "TREBEP", "Estatuto B"], "url": "" }
+    }
+  }
+}
