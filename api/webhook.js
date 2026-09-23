@@ -32,10 +32,12 @@ const TEXTO_AYUDA =
   "/DIA on – activar reserva de ese día (p.ej. /martes on)\n" +
   "/DIA off – desactivar reserva de ese día\n" +
   "/hora DIA HH:MM – cambiar la hora de ese día (p.ej. /hora jueves 15:00)\n" +
-  "/estado – ver configuración actual\n\n" +
+  "/estado – ver configuración actual\n" +
+  "/reserva – ¿se completó la última reserva?\n\n" +
   "También puedes escribirme en lenguaje natural, p.ej. \"resérvame el miércoles a las 20:00\" o \"quita el sábado\".\n\n" +
   "Y si necesitas una reserva puntual YA (fuera de tu rutina habitual), dime algo como " +
-  "\"resérvame ya el miércoles 16 a las 13:00\".";
+  "\"resérvame ya el miércoles 16 a las 13:00\". Si ese día aún no se ha abierto en la web, " +
+  "lo dejo apuntado y el robot lo reserva a las 00:00 del día que se abra.";
 
 function fechaHoyMadrid() {
   // Formato YYYY-MM-DD en la zona horaria de Madrid
@@ -49,6 +51,39 @@ function fechaHoyMadrid() {
   return `${obj.year}-${obj.month}-${obj.day}`;
 }
 
+// Hora "9:00" -> "09:00"; null si no es válida
+function normalizarHora(hora) {
+  const m = /^\s*(\d{1,2}):(\d{2})\s*$/.exec(hora || "");
+  if (!m) return null;
+  const h = Number(m[1]);
+  const mi = Number(m[2]);
+  if (h > 23 || mi > 59) return null;
+  return `${String(h).padStart(2, "0")}:${m[2]}`;
+}
+
+function sumarDias(fechaIso, dias) {
+  const d = new Date(`${fechaIso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
+}
+
+function fechaLegible(fechaIso) {
+  const d = new Date(`${fechaIso}T12:00:00Z`);
+  return `${DIAS_ORDEN[(d.getUTCDay() + 6) % 7]} ${fechaIso.slice(8, 10)}/${fechaIso.slice(5, 7)}`;
+}
+
+// La web abre cada día con 2 días de antelación, a las 00:00 de Madrid:
+// la fecha F se puede reservar desde el día F-2 (inclusive).
+const DIAS_ANTELACION = 2;
+
+function limpiarPuntualesPasadas(cfg) {
+  const hoy = fechaHoyMadrid();
+  if (Array.isArray(cfg._puntuales)) {
+    cfg._puntuales = cfg._puntuales.filter((p) => p && p.fecha >= hoy);
+    if (cfg._puntuales.length === 0) delete cfg._puntuales;
+  }
+}
+
 function promptSistemaConFecha() {
   return `${PROMPT_SISTEMA}\n\nHoy es ${fechaHoyMadrid()} (zona horaria de Madrid). Usa esta fecha como referencia para calcular fechas relativas ("mañana", "el próximo miércoles", "el 16 de septiembre", etc.).`;
 }
@@ -60,28 +95,35 @@ Tu única tarea es traducir el ÚLTIMO mensaje del usuario a UNA acción, y resp
 EXCLUSIVAMENTE con un objeto JSON (sin markdown, sin texto adicional, sin \`\`\`),
 con esta forma exacta:
 
-{"accion": "activar" | "desactivar" | "cambiar_hora" | "estado" | "ayuda" | "pregunta" | "reservar_ahora" | "estado_reserva" | "desconocido",
+{"accion": "activar" | "desactivar" | "cambiar_hora" | "estado" | "ayuda" | "pregunta" | "reservar_ahora" | "cancelar_puntual" | "estado_reserva" | "desconocido",
  "dia": "lunes" | "martes" | "miércoles" | "jueves" | "viernes" | "sábado" | "domingo" | null,
  "hora": "HH:MM" | null,
  "fecha": "YYYY-MM-DD" | null}
 
 Reglas:
 - Puede ser CUALQUIER día de la semana, no hay restricción de días.
-- Si el usuario pide activar un día de forma RECURRENTE (todas las semanas) -> "activar".
+- Si el usuario pide activar un día de forma RECURRENTE (todas las semanas) -> "activar"
+  (si además dice la hora, rellena "hora").
 - Si pide cancelar/desactivar/quitar un día de forma recurrente -> "desactivar".
 - Si pide cambiar la hora de la rutina habitual -> "cambiar_hora" y rellena "hora".
 - Si pide ver la CONFIGURACIÓN (qué días están activados) -> "estado".
 - Si pide ayuda o no sabe qué hacer -> "ayuda".
 - Si hace una pregunta sobre CÓMO funciona el sistema, sin pedir cambiar nada -> "pregunta".
-- Si pregunta si una reserva CONCRETA se ha hecho/confirmado de verdad ("¿está
-  reservado?", "¿se reservó?", "¿ha salido bien?", "¿lo has confirmado?") ->
+- Si pregunta o comenta si una reserva CONCRETA se ha hecho/confirmado de verdad
+  ("¿está reservado?", "¿se reservó?", "se reservo", "¿ha salido bien?", "¿lo has
+  confirmado?", "¿funcionó?"), aunque no lleve signos de interrogación ->
   "estado_reserva".
 - Si pide una reserva PUNTUAL, para una fecha o día concreto, YA/AHORA MISMO,
   fuera de su rutina habitual (p.ej. "resérvame ya el miércoles 16", "reserva
   ahora para mañana a las 15:00", avisando de que "ya puedes reservar" ese
   día) -> "reservar_ahora", calcula "fecha" en formato YYYY-MM-DD a partir
   de la fecha de hoy que te doy y del día/fecha que mencione, y "hora" si la
-  da (si no, usa null y se usará la hora por defecto).
+  da (si no, usa null y se usará la hora por defecto). La hora SIEMPRE en
+  formato 24h HH:MM ("a la 1" o "a las 13" -> "13:00", porque la piscina es a
+  mediodía; "a las 9" -> "09:00").
+- Si pide ANULAR una reserva puntual que había pedido para una fecha concreta
+  ("ya no quiero lo del viernes 26", "cancela la reserva puntual del 26") ->
+  "cancelar_puntual" con su "fecha".
 - Si no entiendes la frase o no tiene relación con esto -> "desconocido".
 - Los campos que no apliquen van a null.
 - Responde SOLO el JSON, nada más.`;
@@ -107,13 +149,17 @@ sin tecnicismos innecesarios):
   concreta (fuera de su rutina habitual), diciendo algo como "resérvame ya
   el miércoles 16 a las 13:00". Esto lanza el robot en el momento, sin
   esperar a las 00:00, aunque solo funcionará si la web ya tiene ese hueco
-  abierto (recuerda: máximo 2 días de antelación).
+  abierto (recuerda: máximo 2 días de antelación). Si todavía no está abierto,
+  el bot lo deja apuntado y el robot lo reserva a las 00:00 del día en que se
+  abra (sin que el usuario tenga que hacer nada más).
 
 Responde solo en texto normal (nada de JSON), en español, tuteando al usuario.`;
 
 function textoEstado(cfg) {
   const diasConfigurados = DIAS_ORDEN.filter((d) => cfg[d]);
-  if (diasConfigurados.length === 0) {
+  const hoy = fechaHoyMadrid();
+  const puntuales = (cfg._puntuales || []).filter((p) => p && p.fecha >= hoy);
+  if (diasConfigurados.length === 0 && puntuales.length === 0) {
     return "📋 Todavía no tienes ningún día configurado. Dime, por ejemplo, \"resérvame el martes a las 13:00\".";
   }
   const lineas = diasConfigurados.map((dia) => {
@@ -121,7 +167,13 @@ function textoEstado(cfg) {
     const estado = c.activo ? "ACTIVADO" : "desactivado";
     return `• ${dia[0].toUpperCase() + dia.slice(1)}: ${estado}, a las ${c.hora || "13:00"}`;
   });
-  return "📋 Configuración actual:\n" + lineas.join("\n");
+  let texto = "📋 Configuración actual:\n" + lineas.join("\n");
+  if (puntuales.length > 0) {
+    texto +=
+      "\n\n📌 Reservas puntuales apuntadas:\n" +
+      puntuales.map((p) => `• ${fechaLegible(p.fecha)} a las ${p.hora || "13:00"}`).join("\n");
+  }
+  return texto;
 }
 
 async function enviarMensaje(chatId, texto) {
@@ -150,7 +202,7 @@ async function leerConfig() {
 async function guardarConfig(cfg, sha) {
   const { GH_TOKEN, GH_REPO } = process.env;
   const contenido = Buffer.from(JSON.stringify(cfg, null, 2)).toString("base64");
-  await fetch(`https://api.github.com/repos/${GH_REPO}/contents/config.json`, {
+  const r = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/config.json`, {
     method: "PUT",
     headers: {
       Authorization: `Bearer ${GH_TOKEN}`,
@@ -164,6 +216,24 @@ async function guardarConfig(cfg, sha) {
       branch: "main",
     }),
   });
+  if (!r.ok) {
+    console.error("Error guardando config.json en GitHub. Status:", r.status, "Body:", await r.text());
+  }
+  return r.ok;
+}
+
+// Aplica `mutar` sobre la config más reciente y la guarda. Si otro mensaje
+// la ha modificado a la vez (conflicto de sha), la relee y lo reintenta.
+async function modificarConfig(cfgInicial, shaInicial, mutar) {
+  let cfg = cfgInicial;
+  let sha = shaInicial;
+  for (let intento = 0; intento < 3; intento++) {
+    mutar(cfg);
+    limpiarPuntualesPasadas(cfg);
+    if (await guardarConfig(cfg, sha)) return true;
+    ({ cfg, sha } = await leerConfig());
+  }
+  return false;
 }
 
 function obtenerHistorial(cfg, chatId) {
@@ -216,28 +286,49 @@ async function responderPregunta(texto, historial) {
   }
 }
 
+// Busca la última ejecución que INTENTÓ reservar de verdad. La mayoría de
+// pasadas nocturnas del workflow automático terminan en segundos sin hacer
+// nada (no toca ese día, o ya se intentó), y no cuentan.
 async function consultarUltimaReserva() {
   const { GH_TOKEN, GH_REPO } = process.env;
   const headers = { Authorization: `Bearer ${GH_TOKEN}`, Accept: "application/vnd.github+json" };
+  const api = `https://api.github.com/repos/${GH_REPO}/actions`;
 
   try {
     const [rAuto, rManual] = await Promise.all([
-      fetch(`https://api.github.com/repos/${GH_REPO}/actions/workflows/reserva.yml/runs?per_page=1`, { headers }),
-      fetch(`https://api.github.com/repos/${GH_REPO}/actions/workflows/reserva-manual.yml/runs?per_page=1`, { headers }),
+      fetch(`${api}/workflows/reserva.yml/runs?per_page=30`, { headers }),
+      fetch(`${api}/workflows/reserva-manual.yml/runs?per_page=5`, { headers }),
     ]);
     const [dAuto, dManual] = await Promise.all([rAuto.json(), rManual.json()]);
-    const runs = [...(dAuto.workflow_runs || []), ...(dManual.workflow_runs || [])];
-    if (runs.length === 0) return null;
+    const runs = [...(dAuto.workflow_runs || []), ...(dManual.workflow_runs || [])]
+      .filter((run) => run.conclusion !== "cancelled" && run.conclusion !== "skipped")
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-    // La más reciente de las dos
-    runs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    const ultima = runs[0];
-    return {
-      status: ultima.status, // "completed" | "in_progress" | "queued"
-      conclusion: ultima.conclusion, // "success" | "failure" | null
-      created_at: ultima.created_at,
-      html_url: ultima.html_url,
-    };
+    let consultados = 0;
+    for (const run of runs) {
+      if (consultados >= 12) break;
+      // Una pasada que acabó en menos de 45 s no llegó ni a instalar el navegador
+      const duracion = new Date(run.updated_at) - new Date(run.run_started_at || run.created_at);
+      if (run.status === "completed" && duracion < 45000) continue;
+
+      consultados++;
+      const rJobs = await fetch(`${api}/runs/${run.id}/jobs`, { headers });
+      const dJobs = await rJobs.json();
+      const pasos = (dJobs.jobs || []).flatMap((j) => j.steps || []);
+      const paso = pasos.find((p) => /^Ejecutar reserva/.test(p.name || ""));
+      if (!paso || paso.conclusion === "skipped") continue;
+      if (run.status === "completed" && paso.status !== "completed") continue;
+
+      const fecha = ((paso.name || "").match(/\d{4}-\d{2}-\d{2}/) || [])[0] || null;
+      return {
+        status: paso.status === "completed" ? "completed" : "in_progress",
+        conclusion: paso.conclusion, // "success" | "failure" | null
+        created_at: run.created_at,
+        html_url: run.html_url,
+        fecha,
+      };
+    }
+    return { ninguna: true };
   } catch (e) {
     console.error("Error consultando última reserva:", e);
     return null;
@@ -248,20 +339,24 @@ function textoEstadoReserva(info) {
   if (!info) {
     return "No he podido consultar el historial de ejecuciones ahora mismo.";
   }
-  const fecha = new Date(info.created_at).toLocaleString("es-ES", {
+  if (info.ninguna) {
+    return "Todavía no hay ningún intento de reserva reciente que consultar.";
+  }
+  const lanzada = new Date(info.created_at).toLocaleString("es-ES", {
     timeZone: "Europe/Madrid",
     dateStyle: "short",
     timeStyle: "short",
   });
+  const dia = info.fecha ? ` del ${fechaLegible(info.fecha)}` : "";
   if (info.status !== "completed") {
-    return `⏳ El robot está trabajando en ello ahora mismo (lanzado el ${fecha}). Dame un par de minutos y pregúntame otra vez.`;
+    return `⏳ El robot está con la reserva${dia} ahora mismo (lanzado el ${lanzada}). Si está esperando a las 00:00, reservará en cuanto se abra; te aviso por aquí.`;
   }
   if (info.conclusion === "success") {
-    return `✅ Sí, la última reserva (lanzada el ${fecha}) se completó correctamente.`;
+    return `✅ Sí, la última reserva${dia} (lanzada el ${lanzada}) se completó correctamente.`;
   }
   return (
-    `❌ No, la última reserva (lanzada el ${fecha}) falló. ` +
-    `Puedes ver el detalle en GitHub → Actions, o pedirme que lo intente de nuevo.`
+    `❌ No, la última reserva${dia} (lanzada el ${lanzada}) falló. ` +
+    `Te mandé el motivo por aquí; también puedes verlo en GitHub → Actions, o pedirme que lo intente de nuevo.`
   );
 }
 
@@ -329,18 +424,121 @@ async function interpretarConIA(texto, historial) {
       "ayuda",
       "pregunta",
       "reservar_ahora",
+      "cancelar_puntual",
       "estado_reserva",
       "desconocido",
     ];
     if (!accionesValidas.includes(accion.accion)) return null;
     accion.dia = accion.dia ? diaCanonico(accion.dia) : null;
-    if (accion.hora && !/^\d{1,2}:\d{2}$/.test(accion.hora)) accion.hora = null;
+    accion.hora = normalizarHora(accion.hora);
     if (accion.fecha && !/^\d{4}-\d{2}-\d{2}$/.test(accion.fecha)) accion.fecha = null;
     return accion;
   } catch (e) {
     console.error("Error consultando Gemini:", e);
     return null;
   }
+}
+
+// "los sábado" -> "los sábados" (lunes-viernes no cambian en plural)
+function plural(dia) {
+  return /o$/.test(dia) ? `${dia}s` : dia;
+}
+
+function nuevoDia(cfg, dia) {
+  cfg[dia] = cfg[dia] || { activo: true, hora: "13:00" };
+  return cfg[dia];
+}
+
+// Traduce una acción (de comando fijo o de la IA) en la respuesta a dar y,
+// si hace falta, en el cambio de configuración a guardar.
+async function resolverAccion(accion, cfg) {
+  const { dia } = accion;
+
+  if ((accion.accion === "activar" || accion.accion === "desactivar") && dia) {
+    const activo = accion.accion === "activar";
+    const hora = accion.hora;
+    let texto = `✅ Reserva de los ${plural(dia)} ${activo ? "activada" : "desactivada"}`;
+    if (activo && hora) texto += ` a las ${hora}`;
+    return {
+      respuesta: texto + ".",
+      mutacion: (c) => {
+        nuevoDia(c, dia).activo = activo;
+        if (activo && hora) c[dia].hora = hora;
+      },
+    };
+  }
+
+  if (accion.accion === "cambiar_hora" && dia && accion.hora) {
+    const hora = accion.hora;
+    return {
+      respuesta: `✅ Hora de reserva de los ${plural(dia)} cambiada a las ${hora}.`,
+      mutacion: (c) => {
+        nuevoDia(c, dia).hora = hora;
+      },
+    };
+  }
+
+  if (accion.accion === "estado") return { respuesta: textoEstado(cfg) };
+  if (accion.accion === "ayuda") return { respuesta: TEXTO_AYUDA };
+  if (accion.accion === "estado_reserva") {
+    return { respuesta: textoEstadoReserva(await consultarUltimaReserva()) };
+  }
+
+  if (accion.accion === "reservar_ahora" && accion.fecha) {
+    const { fecha } = accion;
+    const hoy = fechaHoyMadrid();
+    const diaFecha = fechaLegible(fecha).split(" ")[0];
+    const hora = accion.hora || (cfg[diaFecha] && normalizarHora(cfg[diaFecha].hora)) || "13:00";
+
+    if (fecha < hoy) {
+      return { respuesta: `⚠️ El ${fechaLegible(fecha)} ya ha pasado, no puedo reservarlo.` };
+    }
+
+    if (fecha <= sumarDias(hoy, DIAS_ANTELACION)) {
+      // La web ya tiene ese día abierto: lanzamos el robot ahora mismo
+      const ok = await dispararReservaManual(fecha, hora);
+      return {
+        respuesta: ok
+          ? `🚀 Marchando: he lanzado la reserva del ${fechaLegible(fecha)} a las ${hora}. ` +
+            `Tardará unos minutos; te aviso por aquí en cuanto termine (con captura si sale bien).`
+          : "❌ No he podido lanzar la reserva puntual (fallo al hablar con GitHub). " +
+            "Puedes intentarlo también a mano desde Actions → \"Reserva puntual (manual)\".",
+      };
+    }
+
+    // Todavía no se ha abierto: se apunta y el robot nocturno la hará a las 00:00
+    const apertura = sumarDias(fecha, -DIAS_ANTELACION);
+    return {
+      respuesta:
+        `📌 Apuntado: el ${fechaLegible(fecha)} a las ${hora}. La web abre ese día el ` +
+        `${fechaLegible(apertura)} a las 00:00, y el robot lo reservará en ese mismo momento. ` +
+        `Te aviso por aquí cuando esté.`,
+      mutacion: (c) => {
+        const lista = (c._puntuales || []).filter((p) => p.fecha !== fecha);
+        lista.push({ fecha, hora });
+        lista.sort((a, b) => a.fecha.localeCompare(b.fecha));
+        c._puntuales = lista;
+      },
+    };
+  }
+
+  if (accion.accion === "cancelar_puntual" && accion.fecha) {
+    const { fecha } = accion;
+    const existe = (cfg._puntuales || []).some((p) => p.fecha === fecha);
+    if (!existe) {
+      return { respuesta: `No tenía ninguna reserva puntual apuntada para el ${fechaLegible(fecha)}.` };
+    }
+    return {
+      respuesta: `🗑️ Quitada la reserva puntual del ${fechaLegible(fecha)}.`,
+      mutacion: (c) => {
+        c._puntuales = (c._puntuales || []).filter((p) => p.fecha !== fecha);
+      },
+    };
+  }
+
+  return {
+    respuesta: "Entendí que quieres algo, pero no me quedó claro el día o la hora 🤔\n\n" + TEXTO_AYUDA,
+  };
 }
 
 export default async function handler(req, res) {
@@ -369,8 +567,8 @@ export default async function handler(req, res) {
 
   try {
     const { cfg, sha } = await leerConfig();
-    let cambiado = false;
-    let respuestaBot = null;
+    let resultado;
+    let conHistorial = false;
 
     const mOnOff = textoLower.match(
       /^\/(lunes|martes|mi[ée]rcoles|jueves|viernes|s[áa]bado|domingo)\s+(on|off)$/
@@ -380,87 +578,58 @@ export default async function handler(req, res) {
     );
 
     if (mOnOff) {
-      const dia = diaCanonico(mOnOff[1]);
-      const estado = mOnOff[2];
-      cfg[dia] = cfg[dia] || { activo: true, hora: "13:00" };
-      cfg[dia].activo = estado === "on";
-      cambiado = true;
-      respuestaBot = `✅ Reserva de los ${dia} ${estado === "on" ? "activada" : "desactivada"}.`;
-      await enviarMensaje(chatId, respuestaBot);
+      resultado = await resolverAccion(
+        { accion: mOnOff[2] === "on" ? "activar" : "desactivar", dia: diaCanonico(mOnOff[1]), hora: null },
+        cfg
+      );
     } else if (mHora) {
-      const dia = diaCanonico(mHora[1]);
-      const hora = mHora[2];
-      cfg[dia] = cfg[dia] || { activo: true, hora: "13:00" };
-      cfg[dia].hora = hora;
-      cambiado = true;
-      respuestaBot = `✅ Hora de reserva de los ${dia} cambiada a las ${hora}.`;
-      await enviarMensaje(chatId, respuestaBot);
+      const hora = normalizarHora(mHora[2]);
+      resultado = hora
+        ? await resolverAccion({ accion: "cambiar_hora", dia: diaCanonico(mHora[1]), hora }, cfg)
+        : { respuesta: "⚠️ Esa hora no es válida. Usa el formato HH:MM, p.ej. /hora jueves 13:00" };
     } else if (["/estado", "estado"].includes(textoLower)) {
-      respuestaBot = textoEstado(cfg);
-      await enviarMensaje(chatId, respuestaBot);
+      resultado = { respuesta: textoEstado(cfg) };
+    } else if (["/reserva", "/ultima"].includes(textoLower)) {
+      resultado = await resolverAccion({ accion: "estado_reserva" }, cfg);
     } else if (["/ayuda", "/start", "ayuda"].includes(textoLower)) {
-      respuestaBot = TEXTO_AYUDA;
-      await enviarMensaje(chatId, respuestaBot);
+      resultado = { respuesta: TEXTO_AYUDA };
     } else {
+      conHistorial = true;
       const historial = obtenerHistorial(cfg, chatId);
       const accion = await interpretarConIA(texto, historial);
 
       if (!accion || accion.accion === "desconocido") {
-        respuestaBot = "No entendí ese mensaje 🤔\n\n" + TEXTO_AYUDA;
-        await enviarMensaje(chatId, respuestaBot);
-      } else if ((accion.accion === "activar" || accion.accion === "desactivar") && accion.dia) {
-        cfg[accion.dia] = cfg[accion.dia] || { activo: true, hora: "13:00" };
-        cfg[accion.dia].activo = accion.accion === "activar";
-        cambiado = true;
-        respuestaBot = `✅ Reserva de los ${accion.dia} ${accion.accion === "activar" ? "activada" : "desactivada"}.`;
-        await enviarMensaje(chatId, respuestaBot);
-      } else if (accion.accion === "cambiar_hora" && accion.dia && accion.hora) {
-        cfg[accion.dia] = cfg[accion.dia] || { activo: true, hora: "13:00" };
-        cfg[accion.dia].hora = accion.hora;
-        cambiado = true;
-        respuestaBot = `✅ Hora de reserva de los ${accion.dia} cambiada a las ${accion.hora}.`;
-        await enviarMensaje(chatId, respuestaBot);
-      } else if (accion.accion === "estado") {
-        respuestaBot = textoEstado(cfg);
-        await enviarMensaje(chatId, respuestaBot);
-      } else if (accion.accion === "ayuda") {
-        respuestaBot = TEXTO_AYUDA;
-        await enviarMensaje(chatId, respuestaBot);
+        resultado = { respuesta: "No entendí ese mensaje 🤔\n\n" + TEXTO_AYUDA };
       } else if (accion.accion === "pregunta") {
-        respuestaBot = await responderPregunta(texto, historial);
-        await enviarMensaje(chatId, respuestaBot);
-      } else if (accion.accion === "reservar_ahora" && accion.fecha) {
-        const ok = await dispararReservaManual(accion.fecha, accion.hora);
-        if (ok) {
-          respuestaBot =
-            `🚀 Marchando: he lanzado una reserva puntual para el ${accion.fecha} ` +
-            `a las ${accion.hora || "13:00"}. Tardará unos minutos en completarse (o fallará ` +
-            `si la web aún no tiene ese hueco abierto); te aviso por aquí en cuanto termine.`;
-        } else {
-          respuestaBot =
-            "❌ No he podido lanzar la reserva puntual (fallo al hablar con GitHub). " +
-            "Puedes intentarlo también a mano desde Actions → \"Reserva puntual (manual)\".";
-        }
-        await enviarMensaje(chatId, respuestaBot);
-      } else if (accion.accion === "estado_reserva") {
-        const info = await consultarUltimaReserva();
-        respuestaBot = textoEstadoReserva(info);
-        await enviarMensaje(chatId, respuestaBot);
+        resultado = { respuesta: await responderPregunta(texto, historial) };
       } else {
-        respuestaBot =
-          "Entendí que quieres algo, pero no me quedó claro el día o la hora 🤔\n\n" + TEXTO_AYUDA;
-        await enviarMensaje(chatId, respuestaBot);
+        resultado = await resolverAccion(accion, cfg);
       }
-
-      guardarEnHistorial(cfg, chatId, texto, respuestaBot);
-      cambiado = true; // el historial también se guarda en config.json
     }
 
-    if (cambiado) {
-      await guardarConfig(cfg, sha);
+    let respuestaBot = resultado.respuesta;
+
+    // Guardamos ANTES de contestar, para no decir "✅" si el cambio no se ha
+    // podido guardar. El historial de la conversación también va en config.json.
+    if (resultado.mutacion || conHistorial) {
+      const ok = await modificarConfig(cfg, sha, (c) => {
+        if (resultado.mutacion) resultado.mutacion(c);
+        if (conHistorial) guardarEnHistorial(c, chatId, texto, respuestaBot);
+      });
+      if (!ok && resultado.mutacion) {
+        respuestaBot =
+          "❌ No he podido guardar el cambio (fallo al hablar con GitHub). Inténtalo de nuevo en un momento.";
+      }
     }
+
+    await enviarMensaje(chatId, respuestaBot);
   } catch (e) {
     console.error("Error procesando update:", e);
+    try {
+      await enviarMensaje(chatId, "❌ Ha habido un error procesando tu mensaje. Inténtalo de nuevo en un momento.");
+    } catch (_) {
+      // nada más que hacer
+    }
   }
 
   res.status(200).send("ok");
